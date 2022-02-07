@@ -73,6 +73,23 @@ dhcp_settings() {
 }
 
 up() {
+  echo "Starting background systemd-resolved updater script..."
+  script_type=up_detached
+  $(readlink -f "${BASH_SOURCE}") "$@" &
+  echo $! > /tmp/update-systemd-resolved-up-detached-$1.pid
+}
+
+up_detached() {
+  while true; do
+    if [[ "$(systemd-resolve --status $link)" != *"Current DNS Server"* ]]; then
+      echo "VPN dns settings missing, trying to update..."
+      up_real "$@"
+    fi
+    sleep 1
+  done
+}
+
+up_real() {
   local link="$1"
   shift
   local if_index="$1"
@@ -137,6 +154,12 @@ up() {
 }
 
 down() {
+  echo "Stopping background systemd-resolved updater script..."
+  kill $(cat /tmp/update-systemd-resolved-up-detached-$1.pid) || true
+  down_real "$@"
+}
+
+down_real() {
   local link="$1"
   shift
   local if_index="$1"
